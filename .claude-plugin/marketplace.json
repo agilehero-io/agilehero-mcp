@@ -1,0 +1,17 @@
+{
+  "name": "agilehero",
+  "owner": { "name": "AgileHero", "url": "https://agilehero.io" },
+  "metadata": { "description": "AgileHero — agile project management over MCP", "version": "1.0.0" },
+  "plugins": [
+    {
+      "name": "agilehero",
+      "source": "./",
+      "description": "Agile project management over MCP: boards, epics, roadmap, retros, whiteboards, wiki, metrics — 49 tools, OAuth sign-in.",
+      "version": "1.0.0",
+      "author": { "name": "AgileHero", "url": "https://agilehero.io" },
+      "homepage": "https://agilehero.io/docs/mcp",
+      "category": "productivity",
+      "keywords": ["project-management", "kanban", "agile", "mcp"]
+    }
+  ]
+}

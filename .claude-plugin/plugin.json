@@ -1,0 +1,13 @@
+{
+  "name": "agilehero",
+  "version": "1.0.0",
+  "description": "Agile project management over MCP: boards, epics, roadmap, retros, whiteboards, wiki, metrics — 49 tools, OAuth sign-in.",
+  "author": { "name": "AgileHero", "url": "https://agilehero.io" },
+  "homepage": "https://agilehero.io/docs/mcp",
+  "repository": "https://github.com/agilehero-io/agilehero-mcp",
+  "license": "MIT",
+  "keywords": ["project-management", "kanban", "agile", "scrum", "retrospectives", "roadmap", "whiteboard", "wiki", "mcp"],
+  "mcpServers": {
+    "agilehero": { "type": "http", "url": "https://mcp.agilehero.io/mcp" }
+  }
+}

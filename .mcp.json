@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "agilehero": {
+      "type": "http",
+      "url": "https://mcp.agilehero.io/mcp"
+    }
+  }
+}
