@@ -1,0 +1,1828 @@
+{
+  "note": "Generated from the AgileHero backend tool classes by bin/rails mcp:docs — do not edit by hand.",
+  "docsUrl": "https://agilehero.io/docs/mcp",
+  "ahmDocsUrl": "https://agilehero.io/docs/mcp/agilehero-markup",
+  "toolCount": 49,
+  "instructions": "AgileHero MCP server.\n\nEvery id parameter and every id in a response is a short uid — always use uids returned by\nlist/get/search tools, never invent one. Most tools need a project uid — call list_projects\nfirst to discover workspaces and projects. Prefer search (full-text, all content types) over\nsearch_cards (title-substring, one project).\n\nOn update tools, prefer the add_*/remove_* delta fields for collections (incremental, safe);\nthe plain collection fields (assigned_to, labels, checklists, cards_relations, links,\nattachments) REPLACE the prior state and cannot be combined with their deltas. Checklist\nitems are { description, checked }. Catch up on changes with updated_since on list_cards /\nlist_epics.\n\nUse move_card (not update_card) to change a card's list or position; an empty list_id means\nthe backlog.\n\nWiki, whiteboard, retrospective, and roadmap tools require the project's workspace to be on\na Pro or trial plan. Whiteboard element writes are batch tools and all-or-nothing; element\nuids come from get_whiteboard. Retrospective items are managed with add_retro_items and\nmove_retro_item (move_card refuses retrospective cards).\n\nDaily limits: tool calls are metered per user per workspace — 500/day on the Free plan,\n5,000/day on Pro or trial, resetting at 00:00 UTC. get_ahm_spec and list_projects are never\ncounted (nor is any call not attributable to a single workspace, like an unscoped search).\nOver the limit, tools return a daily-limit error until the reset or an upgrade.\n\nALL rich text (wiki pages, card/epic descriptions, comments) is AgileHero Markup (AHM) —\nstrict XML, NEVER markdown or HTML; call get_ahm_spec once before writing any. Rich-text\nedits are two-step by design: preview_wiki_page_update / preview_description_update\n(consequences + preview_token), then the matching update tool with that token.\n\nFull tool documentation: https://agilehero.io/docs/mcp\n\nAHM specification: https://agilehero.io/docs/mcp/agilehero-markup",
+  "setup": {
+    "endpoint": "https://mcp.agilehero.io/mcp",
+    "transport": "Streamable HTTP (POST)",
+    "auth": "oauth",
+    "serverName": "agilehero",
+    "verifiedAt": "2026-09-15",
+    "clients": [
+      {
+        "key": "claude_code",
+        "name": "Claude Code",
+        "tier": "picker",
+        "summary": "Run once in a terminal; Claude Code stores the server in your user-level config and signs in through your browser.",
+        "format": "shell",
+        "configPath": null,
+        "snippet": "claude mcp add --transport http --scope user agilehero {{ENDPOINT}}",
+        "notes": [
+          "All flags must come before the server name.",
+          "Then run `/mcp` inside a Claude Code session and choose Authenticate (or run `claude mcp login agilehero`) and approve the sign-in in your browser."
+        ],
+        "verify": "Run `claude mcp list` — agilehero should show as connected. If it shows \"needs authentication\", run `claude mcp login agilehero`.",
+        "docsUrl": "https://code.claude.com/docs/en/mcp",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "vscode",
+        "name": "VS Code (GitHub Copilot)",
+        "tier": "picker",
+        "summary": "Add to .vscode/mcp.json in a workspace, or run \"MCP: Open User Configuration\" for all workspaces. A browser window opens for the sign-in the first time the server starts.",
+        "format": "json",
+        "configPath": ".vscode/mcp.json",
+        "snippet": "{\n  \"servers\": {\n    \"agilehero\": {\n      \"type\": \"http\",\n      \"url\": \"{{ENDPOINT}}\"\n    }\n  }\n}",
+        "notes": [
+          "\"type\": \"http\" is required — without it VS Code treats the URL as a command to run."
+        ],
+        "verify": "Run \"MCP: List Servers\", start agilehero, complete the sign-in in the browser, and check that its tools appear in the Chat view.",
+        "docsUrl": "https://code.visualstudio.com/docs/agents/reference/mcp-configuration",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "codex",
+        "name": "Codex",
+        "tier": "picker",
+        "summary": "Add from the terminal, then sign in — the config is shared by the Codex CLI, the IDE extension, and the ChatGPT desktop app.",
+        "format": "shell",
+        "configPath": null,
+        "snippet": "codex mcp add agilehero --url {{ENDPOINT}}\ncodex mcp login agilehero",
+        "notes": [
+          "Codex does not start the sign-in on its own — run `codex mcp login agilehero` after adding the server."
+        ],
+        "verify": "Run `codex mcp list` — agilehero should show as authenticated; then ask Codex to list your AgileHero projects.",
+        "docsUrl": "https://learn.chatgpt.com/docs/extend/mcp",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "zed",
+        "name": "Zed",
+        "tier": "picker",
+        "summary": "Add to settings.json, or use Settings → AI → MCP Servers → Add Remote Server; Zed prompts you to sign in.",
+        "format": "json",
+        "configPath": "~/.config/zed/settings.json",
+        "snippet": "{\n  \"context_servers\": {\n    \"agilehero\": {\n      \"url\": \"{{ENDPOINT}}\"\n    }\n  }\n}",
+        "notes": [
+          "Leave headers out — Zed starts the sign-in only when no Authorization header is configured."
+        ],
+        "docsUrl": "https://zed.dev/docs/ai/mcp",
+        "verifiedAt": "2026-09-15",
+        "verify": "Restart Zed, approve the sign-in in your browser when asked, and ask it to list your AgileHero projects — the first successful call confirms the connection."
+      },
+      {
+        "key": "copilot_cli",
+        "name": "GitHub Copilot CLI",
+        "tier": "picker",
+        "summary": "Add to ~/.copilot/mcp-config.json, or .mcp.json inside a repository.",
+        "format": "json",
+        "configPath": "~/.copilot/mcp-config.json",
+        "snippet": "{\n  \"mcpServers\": {\n    \"agilehero\": {\n      \"type\": \"http\",\n      \"url\": \"{{ENDPOINT}}\"\n    }\n  }\n}",
+        "notes": [
+          "Needs GitHub Copilot CLI 1.0.83 or newer (Client ID Metadata Document support).",
+          "Copilot CLI opens the sign-in when the server first asks for it; you can also run `/mcp auth agilehero` inside a session."
+        ],
+        "verify": "Run `/mcp` inside Copilot CLI — agilehero should be listed as connected with its tools.",
+        "docsUrl": "https://docs.github.com/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "claude_ai",
+        "name": "Claude (web, desktop, Cowork)",
+        "tier": "picker",
+        "summary": "Add AgileHero as a custom connector and sign in; the connector is available in Claude on the web, Claude Desktop, Cowork, and the mobile apps.",
+        "format": "text",
+        "configPath": null,
+        "snippet": "Settings → Connectors → Add custom connector\nName: AgileHero\nURL: {{ENDPOINT}}\nSign in now",
+        "notes": [
+          "The connector also appears in Claude Code when it is signed in with the same Claude account.",
+          "Free plan: one custom connector. Team and Enterprise: an Owner adds the connector, and every member signs in with their own AgileHero account."
+        ],
+        "verify": "Start a new chat — AgileHero is listed under connectors, and asking Claude to list your AgileHero projects works.",
+        "docsUrl": "https://claude.com/docs/connectors/custom/remote-mcp",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "chatgpt",
+        "name": "ChatGPT",
+        "tier": "picker",
+        "summary": "Create a connector in Developer mode and sign in with OAuth.",
+        "format": "text",
+        "configPath": null,
+        "snippet": "Settings → Connectors → Create (Developer mode)\nName: AgileHero\nMCP server URL: {{ENDPOINT}}\nAuthentication: OAuth",
+        "notes": [
+          "Available on Plus, Pro, Business, Enterprise and Edu with Developer mode enabled; in a workspace an admin or owner publishes the connector for members."
+        ],
+        "verify": "Open a new chat with the AgileHero connector enabled and ask ChatGPT to list your AgileHero projects.",
+        "docsUrl": "https://developers.openai.com/api/docs/guides/developer-mode",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "other",
+        "name": "Other client",
+        "tier": "picker",
+        "summary": "Any MCP client that supports OAuth with Client ID Metadata Documents: add the endpoint as a remote (Streamable HTTP) server and approve the sign-in in your browser.",
+        "format": "text",
+        "configPath": null,
+        "snippet": "Transport: Streamable HTTP\nURL: {{ENDPOINT}}\nAuthentication: OAuth (sign in when the client asks)",
+        "notes": [
+          "Clients that only support static tokens or headers cannot connect — AgileHero uses OAuth sign-in only."
+        ],
+        "verify": "Restart the client, approve the sign-in in your browser when asked, and ask it to list your AgileHero projects — the first successful call confirms the connection.",
+        "docsUrl": "https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization",
+        "verifiedAt": "2026-09-15"
+      },
+      {
+        "key": "cursor",
+        "name": "Cursor",
+        "tier": "unsupported",
+        "summary": "Cursor does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://cursor.com/docs/context/mcp",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "opencode",
+        "name": "OpenCode",
+        "tier": "unsupported",
+        "summary": "OpenCode does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://opencode.ai/docs/mcp-servers/",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "gemini_cli",
+        "name": "Gemini CLI",
+        "tier": "unsupported",
+        "summary": "Gemini CLI does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://geminicli.com/docs/tools/mcp-server/",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "cline",
+        "name": "Cline",
+        "tier": "unsupported",
+        "summary": "Cline does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://docs.cline.bot/mcp/configuring-mcp-servers",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "antigravity",
+        "name": "Google Antigravity",
+        "tier": "unsupported",
+        "summary": "Google Antigravity does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://antigravity.google/docs/mcp",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "amp",
+        "name": "Amp",
+        "tier": "unsupported",
+        "summary": "Amp does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://ampcode.com/docs/customize/mcp",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "raycast",
+        "name": "Raycast AI",
+        "tier": "unsupported",
+        "summary": "Raycast AI does not support Client ID Metadata Documents yet (its OAuth sign-in needs Dynamic Client Registration or a pre-registered client), so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://manual.raycast.com/ai/model-context-protocol",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "kiro",
+        "name": "Kiro",
+        "tier": "unsupported",
+        "summary": "Kiro signs in with a Client ID Metadata Document URL that you supply, and AgileHero does not host a Client ID Metadata Document for it yet.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://kiro.dev/docs/mcp/configuration/",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "warp",
+        "name": "Warp",
+        "tier": "unsupported",
+        "summary": "Warp has no OAuth sign-in for user-added servers yet, so it cannot connect to AgileHero for now.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://docs.warp.dev/knowledge-and-collaboration/mcp",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "jetbrains",
+        "name": "JetBrains AI Assistant",
+        "tier": "unsupported",
+        "summary": "JetBrains AI Assistant has no OAuth sign-in for remote servers, and the mcp-remote bridge would need a hosted client document — AgileHero does not host a Client ID Metadata Document for it yet.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://www.jetbrains.com/help/ai-assistant/mcp.html",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      },
+      {
+        "key": "continue",
+        "name": "Continue",
+        "tier": "unsupported",
+        "summary": "Continue has no OAuth sign-in for Streamable HTTP servers, and the mcp-remote bridge would need a hosted client document — AgileHero does not host a Client ID Metadata Document for it yet.",
+        "format": "text",
+        "configPath": null,
+        "snippet": null,
+        "notes": [],
+        "docsUrl": "https://docs.continue.dev/customize/deep-dives/mcp",
+        "verifiedAt": "2026-09-15",
+        "verify": null
+      }
+    ]
+  },
+  "tools": [
+    {
+      "name": "list_projects",
+      "description": "List every workspace and project the token's user can access, so the agent can resolve the project uid that most other tools require. Call this first whenever no project uid is known — never ask the user to paste one. Returns workspaces (uid, name, plan, your role) with their projects (uid, name, url). Pro-pillar tools (wiki, metrics) need the workspace's plan to be pro or trial.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": []
+    },
+    {
+      "name": "search",
+      "description": "The product's global full-text search (OpenSearch): cards, epics, wiki pages and projects, matching titles, descriptions, comments, checklist items and attachment filenames, relevance-ranked with a recency boost. Use this to find anything by content (\"the card where we discussed the migration\"); use search_cards only for title-substring lookups inside one project. Each result carries a type, an action-ready uid (cards feed get_card/update_card, epics get_epic, wiki_pages show_wiki_page, projects the project_id parameters), a deep-link url, and <mark>-highlighted snippets showing why it matched. Optionally scope with project_id or assigned_to_me. Paginate with page/per_page; total_count is the full match count.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Free-text search query"
+        },
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": false,
+          "description": "Optional project uid to scope the search to"
+        },
+        {
+          "name": "assigned_to_me",
+          "type": "boolean",
+          "required": false,
+          "description": "Only results assigned to the token's user"
+        },
+        {
+          "name": "page",
+          "type": "integer",
+          "required": false,
+          "description": "Page number (default 1)"
+        },
+        {
+          "name": "per_page",
+          "type": "integer",
+          "required": false,
+          "description": "Results per page, 1-50 (default 20)"
+        }
+      ]
+    },
+    {
+      "name": "get_card",
+      "description": "Read one card in full: its AgileHero Markup description with block ids plus description_version (the two inputs preview_description_update / update_description take), list placement, epic, labels, assignees, reporter, type, estimation, due date, checklists, links, attachments, related cards and threaded comments. Takes the card uid alone — there is no project_id parameter. Card uids come from list_cards, search or search_cards.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the card"
+        }
+      ]
+    },
+    {
+      "name": "get_epic",
+      "description": "Read one epic in full: its AgileHero Markup description with block ids plus description_version (the two inputs preview_description_update / update_description take), name, number, color, start/end dates, assignees, checklists, links, attachments, the cards on it and threaded comments. Takes the epic uid alone — there is no project_id parameter. Epic uids come from list_epics or search.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the epic"
+        }
+      ]
+    },
+    {
+      "name": "list_wiki_paths",
+      "description": "List a project's whole wiki tree in display order — every folder and page with its uid, name, type (page or folder) and parent_id — so the agent can resolve the page uid show_wiki_page takes and pick a parent_id for create_wiki_page. Requires a Pro or trial workspace.",
+      "premium": "wiki",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        }
+      ]
+    },
+    {
+      "name": "show_wiki_page",
+      "description": "Retrieve a wiki page as AgileHero Markup (AHM) with its document_version. Content is AHM, not markdown — block ids, <discussion> anchors, and <image/>/<attachment/> references are part of the document; read get_ahm_spec before editing. Edit via preview_wiki_page_update then update_wiki_page, using the block ids and document_version returned here. Requires a Pro or trial workspace.",
+      "premium": "wiki",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the page path"
+        }
+      ]
+    },
+    {
+      "name": "get_ahm_spec",
+      "description": "The AgileHero Markup (AHM) v1.0 specification — the ONLY rich-text format AgileHero accepts (markdown and HTML are rejected). Read this ONCE before writing or editing any rich text (wiki pages, card/epic descriptions, comments): vocabulary, attributes, escaping rules, and a worked example. Same text on the web: https://agilehero.io/docs/mcp/agilehero-markup",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": []
+    },
+    {
+      "name": "create_wiki_page",
+      "description": "Create a wiki page (optionally inside a folder) with AgileHero Markup (AHM) content. Content must be wrapped in <agile-hero-markup version=\"1.0\"> — markdown and HTML are rejected; read get_ahm_spec first. Returns the new page's uid, url, document_version and content. Requires a Pro or trial workspace.",
+      "premium": "wiki",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Page title"
+        },
+        {
+          "name": "parent_id",
+          "type": "string",
+          "required": false,
+          "description": "Optional folder uid (from list_wiki_paths)"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": false,
+          "description": "Page body as AHM; omit for an empty page"
+        }
+      ]
+    },
+    {
+      "name": "preview_wiki_page_update",
+      "description": "REQUIRED first step of every wiki page update: validates the operations and returns the server-computed consequences (blocks added/removed/changed, files that would be permanently deleted, team discussions that would lose their anchors, possible-markdown warnings) plus the preview_token that update_wiki_page requires. Nothing is modified. Operations are block-addressed (replace_block / insert_after / delete_block / move_block) with AHM content — read get_ahm_spec first, and get block ids + document_version from show_wiki_page. Review the consequences before saving: a listed file deletion or discussion unanchoring is only acceptable when the user asked for it. Requires a Pro or trial workspace.",
+      "premium": "wiki",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Page path uid"
+        },
+        {
+          "name": "document_version",
+          "type": "string",
+          "required": true,
+          "description": "From show_wiki_page — proves freshness"
+        },
+        {
+          "name": "operations",
+          "type": "array of object",
+          "required": true,
+          "description": "Applied in order against the evolving document"
+        }
+      ]
+    },
+    {
+      "name": "update_wiki_page",
+      "description": "Apply a previously previewed update to a wiki page. Requires the preview_token from preview_wiki_page_update for EXACTLY these operations and this document_version — saving without previewing is impossible by design. Every save creates a page version humans can revert in the app. Returns the updated page (AHM + new document_version) and the applied consequences. Requires a Pro or trial workspace.",
+      "premium": "wiki",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Page path uid"
+        },
+        {
+          "name": "document_version",
+          "type": "string",
+          "required": true,
+          "description": "The version the preview was taken against"
+        },
+        {
+          "name": "operations",
+          "type": "array of object",
+          "required": true,
+          "description": "The exact operations that were previewed"
+        },
+        {
+          "name": "preview_token",
+          "type": "string",
+          "required": true,
+          "description": "From preview_wiki_page_update"
+        }
+      ]
+    },
+    {
+      "name": "preview_description_update",
+      "description": "REQUIRED first step of every card or epic description edit: validates the block operations and returns the server-computed consequences plus the preview_token that update_description requires. Nothing is modified. Content is AgileHero Markup (AHM, description surface: no tables, colors, alignment, discussions, or file attachments) — read get_ahm_spec first; block ids and document_version come from get_card / get_epic.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "resource_type",
+          "type": "enum: card | epic",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Card or epic uid"
+        },
+        {
+          "name": "document_version",
+          "type": "string",
+          "required": true,
+          "description": "From get_card / get_epic"
+        },
+        {
+          "name": "operations",
+          "type": "array of object",
+          "required": true,
+          "description": "Applied in order against the evolving description"
+        }
+      ]
+    },
+    {
+      "name": "update_description",
+      "description": "Apply a previously previewed description update to a card or epic. Requires the preview_token from preview_description_update for EXACTLY these operations and this document_version — saving without previewing is impossible by design. Returns the updated description (AHM + new document_version).",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "resource_type",
+          "type": "enum: card | epic",
+          "required": true
+        },
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Card or epic uid"
+        },
+        {
+          "name": "document_version",
+          "type": "string",
+          "required": true,
+          "description": "The version the preview was taken against"
+        },
+        {
+          "name": "operations",
+          "type": "array of object",
+          "required": true,
+          "description": "The exact operations that were previewed"
+        },
+        {
+          "name": "preview_token",
+          "type": "string",
+          "required": true,
+          "description": "From preview_description_update"
+        }
+      ]
+    },
+    {
+      "name": "list_whiteboards",
+      "description": "List the whiteboards of a project (uid, name, element count, url). Use get_whiteboard to read a board's elements. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        }
+      ]
+    },
+    {
+      "name": "create_whiteboard",
+      "description": "Create an empty whiteboard on a project. Add content with create_whiteboard_elements. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Whiteboard name"
+        }
+      ]
+    },
+    {
+      "name": "get_whiteboard",
+      "description": "Read a whiteboard as a compact text representation: board bounds plus one line per element — \"<type> <uid> at <x>,<y> size <w>x<h> [color] [parent <frame-uid>] [linked <card|epic> <uid>] \\\"text\\\"\", connectors as \"connector <uid> <from> -> <to>\". Element uids from here are the handles every whiteboard write tool takes. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the whiteboard"
+        }
+      ]
+    },
+    {
+      "name": "create_whiteboard_elements",
+      "description": "Create up to 100 whiteboard elements in one transactional call (all-or-nothing, one realtime event). Native sizes, colors, and text placement are applied server-side — usually give just type + text (+ color). Omit x/y and elements are auto-arranged (grid by default; arrange: row|column|grid, origin_x/origin_y/gap to tune); give x/y for full control. Frames contain elements via parent_id (an existing frame uid) or parent_ref (the ref of a frame earlier in THIS call). Connectors bind elements by uid (source_id/target_id) or batch ref (source_ref/target_ref) — never coordinates; anchors are computed by the UI. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "whiteboard_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the whiteboard"
+        },
+        {
+          "name": "elements",
+          "type": "array of object",
+          "required": true,
+          "description": "Created in array order — refs only resolve backwards"
+        },
+        {
+          "name": "arrange",
+          "type": "enum: grid | row | column",
+          "required": false,
+          "description": "Layout for elements without explicit x/y (default grid)"
+        },
+        {
+          "name": "origin_x",
+          "type": "number",
+          "required": false,
+          "description": "Auto-arrange start x (default 100)"
+        },
+        {
+          "name": "origin_y",
+          "type": "number",
+          "required": false,
+          "description": "Auto-arrange start y (default 100)"
+        },
+        {
+          "name": "gap",
+          "type": "number",
+          "required": false,
+          "description": "Auto-arrange spacing in px (default 20)"
+        }
+      ]
+    },
+    {
+      "name": "create_whiteboard_diagram",
+      "description": "Draw a diagram (flowchart, process, dependency graph) on a whiteboard from a semantic graph — nodes, edges, optional groups, NO coordinates: the server does layered top-to-bottom layout with native sizes and returns the created element uids keyed by your node ids. Placed below existing board content. Transactional (all-or-nothing, one realtime event). Max 20 nodes — split bigger flows into two diagrams. Keep shapes plain (rectangle) unless the semantics demand one (diamond = decision, stadium = start/end, cylinder = data store). Edit the result with update_whiteboard_elements — the layout never runs again. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "whiteboard_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the whiteboard"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "description": "Diagram title (frame title, or a heading when groups are used)"
+        },
+        {
+          "name": "nodes",
+          "type": "array of object",
+          "required": true
+        },
+        {
+          "name": "edges",
+          "type": "array of object",
+          "required": false
+        },
+        {
+          "name": "groups",
+          "type": "array of object",
+          "required": false
+        },
+        {
+          "name": "origin_x",
+          "type": "number",
+          "required": false,
+          "description": "Optional top-left x; defaults below existing content"
+        },
+        {
+          "name": "origin_y",
+          "type": "number",
+          "required": false,
+          "description": "Optional top-left y; defaults below existing content"
+        }
+      ]
+    },
+    {
+      "name": "update_whiteboard_elements",
+      "description": "Update up to 100 whiteboard elements in one all-or-nothing call: move (x/y), resize, restack (z_index), retext, recolor, reparent (parent_id — a frame uid, or \"\" to detach), and connector arrow/path/label. Element uids come from get_whiteboard; element types cannot be changed. Only supplied fields change — unrelated properties are preserved. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "whiteboard_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the whiteboard"
+        },
+        {
+          "name": "updates",
+          "type": "array of object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "delete_whiteboard_elements",
+      "description": "Delete up to 100 whiteboard elements in one transactional call. Deleting a frame or mind-map node releases its children onto the board (they are NOT deleted — include their uids explicitly to delete them too). Connectors attached to deleted elements are not removed and will dangle. Element uids come from get_whiteboard. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "whiteboard_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the whiteboard"
+        },
+        {
+          "name": "ids",
+          "type": "array of string",
+          "required": true,
+          "description": "Element uids to delete"
+        }
+      ]
+    },
+    {
+      "name": "review_whiteboard",
+      "description": "Run deterministic quality checks on a whiteboard: text likely overflowing its element, visibly overlapping elements, connectors with unbound or dangling endpoints, colors outside the UI palette, off-grid positions, and elements whose parent was deleted. Advisory — findings are suggestions, not errors, and a board with findings may be exactly what the user wants. Use after drawing to sanity-check, fix at most once, and do not loop chasing an empty report. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the whiteboard"
+        }
+      ]
+    },
+    {
+      "name": "convert_whiteboard_element",
+      "description": "Convert a whiteboard element into a backlog item: a sticky note into a card or an epic, or a frame into an epic (the frame's sticky-note children become cards on that epic; already-converted children are re-assigned, not duplicated). The element stays on the board, linked to what it became — get_whiteboard shows the link. An element can only be converted once. The note/frame text becomes the title unless you pass one. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Element uid (a sticky_note or frame, from get_whiteboard)"
+        },
+        {
+          "name": "to",
+          "type": "enum: card | epic",
+          "required": true,
+          "description": "What to create"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false,
+          "description": "Card title / epic name; defaults to the element's text"
+        },
+        {
+          "name": "list_id",
+          "type": "string",
+          "required": false,
+          "description": "Card only: target list uid; omit for the backlog"
+        },
+        {
+          "name": "color",
+          "type": "string",
+          "required": false,
+          "description": "Epic only: hex color; defaults to the element's color"
+        }
+      ]
+    },
+    {
+      "name": "convert_mind_map",
+      "description": "Convert a mind map into backlog items with a per-node mapping: the root can become a new epic (role \"epic\") or attach to an existing one (role \"existing_epic\" + target_epic_id); other nodes become cards on that epic (role \"card\") or project labels (role \"label\" — label nodes above a card node in the tree are applied to that card); role \"skip\" ignores a node. Pass the ROOT element uid as id and every node you want converted in nodes (unlisted nodes are ignored). One conversion per node: already-converted nodes are rejected up front — resubmit without them. Requires a Pro or trial workspace.",
+      "premium": "whiteboard",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The ROOT mind-map node uid (from get_whiteboard)"
+        },
+        {
+          "name": "nodes",
+          "type": "array of object",
+          "required": true
+        },
+        {
+          "name": "target_epic_id",
+          "type": "string",
+          "required": false,
+          "description": "Epic uid, required with role \"existing_epic\" on the root"
+        }
+      ]
+    },
+    {
+      "name": "list_retrospectives",
+      "description": "List a project's retrospective meetings, most recent first (uid, name, date, url). Use get_retrospective for a board's columns and items. Requires a Pro or trial workspace.",
+      "premium": "retrospectives",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        }
+      ]
+    },
+    {
+      "name": "create_retrospective",
+      "description": "Create a retrospective meeting. The board is seeded with the standard columns (Kudos, Liked, Disliked, Questions, Discussion, Actions) and their uids are returned, so add_retro_items can be called immediately. Pass previous_retrospective_id to carry the previous meeting's Actions column over as a read-only \"Past actions\" view (nothing is copied — the link is live). Requires a Pro or trial workspace.",
+      "premium": "retrospectives",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "description": "Meeting name"
+        },
+        {
+          "name": "starts_at",
+          "type": "string",
+          "required": false,
+          "description": "Meeting date, ISO-8601 (YYYY-MM-DD); defaults to today"
+        },
+        {
+          "name": "previous_retrospective_id",
+          "type": "string",
+          "required": false,
+          "description": "Optional uid of an earlier retrospective in this project (from list_retrospectives)"
+        }
+      ]
+    },
+    {
+      "name": "get_retrospective",
+      "description": "Read a retrospective meeting: its columns (with uids — the handles add_retro_items and move_retro_item take), every item with its votes, the read-only \"Past actions\" carried over from the linked previous meeting, and live timer state. Requires a Pro or trial workspace.",
+      "premium": "retrospectives",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the retrospective meeting"
+        }
+      ]
+    },
+    {
+      "name": "add_retro_items",
+      "description": "Add items to a retrospective board, several at once. Each item is { column, text }: column is a column name (Kudos, Liked, Disliked, Questions, Discussion, Actions — case-insensitive) or a column uid from get_retrospective; items are appended in the given order. PARTIAL failure: valid items are created, invalid ones are reported per index — check the \"failed\" array. Requires a Pro or trial workspace.",
+      "premium": "retrospectives",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "retrospective_id",
+          "type": "string",
+          "required": true,
+          "description": "The retrospective meeting uid"
+        },
+        {
+          "name": "items",
+          "type": "array of object",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "move_retro_item",
+      "description": "Move a retrospective item to another column of its retro board. Item uids come from get_retrospective; column is a name (case-insensitive) or column uid. Only works on retrospective boards — use move_card for kanban cards. Requires a Pro or trial workspace.",
+      "premium": "retrospectives",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The retro item uid (from get_retrospective)"
+        },
+        {
+          "name": "column",
+          "type": "string",
+          "required": true,
+          "description": "Target column name or uid"
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "required": false,
+          "description": "Position in the target column; omit for the top"
+        }
+      ]
+    },
+    {
+      "name": "list_project_users",
+      "description": "List the people with access to a project — its creator, anyone explicitly added, and every workspace owner/admin — so the agent can resolve assignee uids instead of guessing names. Returns each member's uid, full name, email and workspace role (owner, admin, member or observer). Those uids are what assigned_to takes on create_card, update_card, create_epic, update_epic and create_roadmap_slot.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        }
+      ]
+    },
+    {
+      "name": "list_board_lists",
+      "description": "List the lists of a project's kanban board so the agent can resolve a valid move_card destination. Returns each active list in display order with its uid (usable as a move_card target) and display name. The backlog is included as a selectable entry with an empty-string id.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        }
+      ]
+    },
+    {
+      "name": "list_epics",
+      "description": "List a project's epics so the agent can resolve epic uids for get_epic and card assignment. Returns each epic in display order (position ascending) with its uid, number, name, description (Markdown), color, start/end dates and card counts.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        },
+        {
+          "name": "updated_since",
+          "type": "string",
+          "required": false,
+          "description": "Only epics whose record changed at or after this ISO-8601 date or datetime. Caveat: collection edits (checklists, links) may not bump an epic's change time; name/date/description edits always do."
+        }
+      ]
+    },
+    {
+      "name": "list_labels",
+      "description": "List a project's labels so the agent can reuse the existing taxonomy instead of creating near-duplicates on card writes. Returns each label in display order (position ascending) with its uid, name and position.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        }
+      ]
+    },
+    {
+      "name": "list_cards",
+      "description": "List the cards of one kanban list, or of the project's backlog when list_id is omitted or empty, in board display order (top of the column first, i.e. placement position descending — the same order the product UI shows). Filters combine with AND: epic_id, label_id, assigned_user_id and reporter_id take uids (an unknown uid matches nothing); due_date keeps cards due on or before the given date. Returns action-sufficient card summaries (uid, title, list + position, epic, labels, assignees, reporter, due date) ready for get_card / move_card / update_card, paginated with limit (default 50, max 100) and offset; total_count is the full filtered count.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        },
+        {
+          "name": "list_id",
+          "type": "string",
+          "required": false,
+          "description": "List uid to read; omit or pass an empty string for the backlog"
+        },
+        {
+          "name": "epic_id",
+          "type": "string",
+          "required": false,
+          "description": "Only cards in this epic (epic uid)"
+        },
+        {
+          "name": "label_id",
+          "type": "string",
+          "required": false,
+          "description": "Only cards carrying this label (label uid)"
+        },
+        {
+          "name": "assigned_user_id",
+          "type": "string",
+          "required": false,
+          "description": "Only cards assigned to this user (user uid)"
+        },
+        {
+          "name": "reporter_id",
+          "type": "string",
+          "required": false,
+          "description": "Only cards reported (created) by this user (user uid)"
+        },
+        {
+          "name": "due_date",
+          "type": "string",
+          "required": false,
+          "description": "Only cards due on or before this date (ISO-8601, e.g. 2026-06-10)"
+        },
+        {
+          "name": "updated_since",
+          "type": "string",
+          "required": false,
+          "description": "Only cards whose record changed at or after this ISO-8601 date or datetime — the \"what changed since I last ran\" filter. Caveat: edits to attached collections (labels, checklists, links) may not bump a card's change time; title/description/scalar edits always do."
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "required": false,
+          "description": "Page size, 1-100 (default 50)"
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "required": false,
+          "description": "Number of cards to skip (default 0)"
+        }
+      ]
+    },
+    {
+      "name": "search_cards",
+      "description": "Title-substring card search within one project (kanban board and backlog), matching the product's in-project live card search exactly (database case-insensitive substring on the card title only — descriptions and comments are not searched; use the search tool for full-text search across all content types), ordered newest-created first. Returns action-sufficient card summaries (uid, title, list placement + position, epic, labels, assignees, reporter, due date); a query with no matches returns an empty cards array, not an error. Paginate with limit (default 50, max 100) and offset; total_count is the full match count.",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        },
+        {
+          "name": "query",
+          "type": "string",
+          "required": true,
+          "description": "Text to match against card titles (case-insensitive substring)"
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "required": false,
+          "description": "Page size, 1-100 (default 50)"
+        },
+        {
+          "name": "offset",
+          "type": "integer",
+          "required": false,
+          "description": "Number of matching cards to skip (default 0)"
+        }
+      ]
+    },
+    {
+      "name": "list_attention_cards",
+      "description": "List the cards needing attention on a project's kanban board — the same lists as the product's Metrics pages. Kinds: stuck (sitting in a column, not backlog/Done, unmoved for over 7 days; longest-stuck first), blocking (undone cards that other cards are blocked by), overdue (due within the next 7 days or already past due; soonest first). kind selects one list or 'all' (default). Optionally filter by an assignee uid or the literal 'unassigned'. Each requested section returns card summaries ready for get_card / move_card / update_card, capped at limit with the full total_count. Requires a Pro or trial workspace.",
+      "premium": "metrics",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        },
+        {
+          "name": "kind",
+          "type": "enum: stuck | blocking | overdue | all",
+          "required": false,
+          "description": "Which attention list to return (default 'all' = every list as its own section)"
+        },
+        {
+          "name": "assignee_id",
+          "type": "string",
+          "required": false,
+          "description": "Only cards assigned to this user uid, or 'unassigned' for cards with no assignee"
+        },
+        {
+          "name": "limit",
+          "type": "integer",
+          "required": false,
+          "description": "Max cards per section, 1-100 (default 50)"
+        }
+      ]
+    },
+    {
+      "name": "get_metrics_summary",
+      "description": "One-call counts of the cards needing attention on a project's kanban board: overdue_cards_count, blocking_cards_count and stuck_cards_count — the same definitions as list_attention_cards, which returns the cards behind each count. Cheap; call this first to decide whether a deeper look is worth it. Requires a Pro or trial workspace.",
+      "premium": "metrics",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier (uid) of the project"
+        }
+      ]
+    },
+    {
+      "name": "list_roadmap_slots",
+      "description": "List a project's roadmap slots overlapping a date window (default: this month through five months out). A slot schedules an epic between two dates and can carry assignees; one epic may hold several slots, overlaps included — that is by design. Returns at most 200 slots — narrow the window if capped. Requires a Pro or trial workspace.",
+      "premium": "roadmap",
+      "readOnly": true,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        },
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": false,
+          "description": "Window start, ISO-8601 (YYYY-MM-DD); default: start of this month"
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": false,
+          "description": "Window end, ISO-8601; default: start_date + 6 months"
+        }
+      ]
+    },
+    {
+      "name": "create_roadmap_slot",
+      "description": "Schedule an epic on the project roadmap: a slot from start_date to end_date, optionally with assignees. An epic may hold several slots and overlaps are allowed by design — check list_roadmap_slots first if you mean to extend an existing slot rather than add one. Requires a Pro or trial workspace.",
+      "premium": "roadmap",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "The unique identifier of the project"
+        },
+        {
+          "name": "epic_id",
+          "type": "string",
+          "required": true,
+          "description": "Epic uid (from list_epics); must belong to this project"
+        },
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": true,
+          "description": "ISO-8601 (YYYY-MM-DD)"
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": true,
+          "description": "ISO-8601; same day as start_date is allowed"
+        },
+        {
+          "name": "assigned_to",
+          "type": "array of string",
+          "required": false,
+          "description": "User uids to assign (project members — see list_project_users)"
+        }
+      ]
+    },
+    {
+      "name": "update_roadmap_slot",
+      "description": "Update a roadmap slot: reschedule or resize (start_date/end_date), move it to another epic of the same project (epic_id), or set its assignees. Only supplied fields change, EXCEPT assigned_to which REPLACES the full assignee set — read the slot first and send everyone who should remain. Slot uids come from list_roadmap_slots. Requires a Pro or trial workspace.",
+      "premium": "roadmap",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The roadmap slot uid"
+        },
+        {
+          "name": "epic_id",
+          "type": "string",
+          "required": false,
+          "description": "New epic uid (same project)"
+        },
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 (YYYY-MM-DD)"
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601"
+        },
+        {
+          "name": "assigned_to",
+          "type": "array of string",
+          "required": false,
+          "description": "REPLACES all assignees (user uids, project members); [] clears"
+        }
+      ]
+    },
+    {
+      "name": "delete_roadmap_slot",
+      "description": "PERMANENTLY delete a roadmap slot (and its assignee links). This cannot be undone — there is no trash for roadmap slots. The epic itself is not touched; to reschedule, prefer update_roadmap_slot. Requires a Pro or trial workspace.",
+      "premium": "roadmap",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "The roadmap slot uid (from list_roadmap_slots)"
+        }
+      ]
+    },
+    {
+      "name": "create_label",
+      "description": "Create a new label on a project by name. If a label with the same name already exists (case-insensitive), the existing label is returned unchanged instead of creating a near-duplicate. The new label is appended at the end of the display order.",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "Project uid the label belongs to"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "create_card",
+      "description": "Create a card on a project's kanban board. Only project_id and title are required. Omit list_id to put the card in the backlog; omit position to join the end of the queue (move_card documents the position contract). description is AgileHero Markup — never markdown or HTML; read get_ahm_spec first. epic_id and assignee uids must already exist (list_epics, list_project_users), while label names that do not exist yet are created on the project. estimation is Fibonacci complexity (0/1/2/3/5/8/13), not a time estimate. Checklists, links, attachments and card relations can all be supplied in this same call.",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "Project uid the card belongs to (the card is created on the project's kanban board)"
+        },
+        {
+          "name": "list_id",
+          "type": "string",
+          "required": false,
+          "description": "List uid; omit to place in backlog"
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "type",
+          "type": "enum: story | bug | chore | research",
+          "required": false
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": false,
+          "description": "AgileHero Markup (AHM) — never markdown or HTML; read get_ahm_spec first. Description surface: no tables, colors, alignment, or discussions."
+        },
+        {
+          "name": "epic_id",
+          "type": "string",
+          "required": false,
+          "description": "Epic uid; must already exist on the project"
+        },
+        {
+          "name": "estimation",
+          "type": "enum: 0 | 1 | 2 | 3 | 5 | 8 | 13",
+          "required": false,
+          "description": "Complexity estimate in story points (Fibonacci scale), not a time estimate"
+        },
+        {
+          "name": "due_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 date"
+        },
+        {
+          "name": "assigned_to",
+          "type": "array of string",
+          "required": false,
+          "description": "Assignee user uids, discoverable via list_project_users"
+        },
+        {
+          "name": "labels",
+          "type": "array of string",
+          "required": false,
+          "description": "Label names; unknown names are created on the project"
+        },
+        {
+          "name": "checklists",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { name, items: [{ description, checked }] }; items keep the supplied order"
+        },
+        {
+          "name": "cards_relations",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { type, target_card_id (a card uid on the same board) }"
+        },
+        {
+          "name": "links",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, description }"
+        },
+        {
+          "name": "attachments",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, name }; the file is fetched from the url"
+        }
+      ]
+    },
+    {
+      "name": "update_card",
+      "description": "Update an existing card by its uid. For collections, prefer the add_*/remove_* delta fields (safe incremental edits: add_labels, remove_assignees, add_checklist_items, check_items, …); the plain collection fields (labels, assigned_to, checklists, cards_relations, links, attachments) REPLACE the prior state destructively and cannot be combined with their deltas. Use move_card to change list or position, and preview_description_update / update_description to edit the description.",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Card uid"
+        },
+        {
+          "name": "type",
+          "type": "enum: story | bug | chore | research",
+          "required": false
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "epic_id",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "estimation",
+          "type": "enum: 0 | 1 | 2 | 3 | 5 | 8 | 13",
+          "required": false,
+          "description": "Complexity estimate in story points (Fibonacci scale), not a time estimate"
+        },
+        {
+          "name": "due_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 date"
+        },
+        {
+          "name": "assigned_to",
+          "type": "array of string",
+          "required": false,
+          "description": "Assignee user uids, discoverable via list_project_users; replaces the card's assignees"
+        },
+        {
+          "name": "labels",
+          "type": "array of string",
+          "required": false,
+          "description": "Label names; unknown names are created on the project; replaces the card's labels"
+        },
+        {
+          "name": "checklists",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { name, items: [{ description, checked }] }; items keep the supplied order; replaces the card's checklists"
+        },
+        {
+          "name": "cards_relations",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { type, target_card_id (a card uid on the same board) }; replaces the card's relations"
+        },
+        {
+          "name": "links",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, description }; replaces the card's links"
+        },
+        {
+          "name": "attachments",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, name }; the file is fetched from the url; replaces the card's attachments"
+        },
+        {
+          "name": "add_labels",
+          "type": "array of string",
+          "required": false,
+          "description": "Add labels by name (unknown names are created); keeps existing labels"
+        },
+        {
+          "name": "remove_labels",
+          "type": "array of string",
+          "required": false,
+          "description": "Remove labels by name (case-insensitive); absent names are no-ops"
+        },
+        {
+          "name": "add_assignees",
+          "type": "array of string",
+          "required": false,
+          "description": "Add assignees by user uid; keeps existing assignees"
+        },
+        {
+          "name": "remove_assignees",
+          "type": "array of string",
+          "required": false,
+          "description": "Remove assignees by user uid; absent uids are no-ops"
+        },
+        {
+          "name": "add_checklist_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Append items: each { checklist, description, checked? } — the named checklist is created if it does not exist"
+        },
+        {
+          "name": "check_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Mark items done, matched by exact description within the named checklist"
+        },
+        {
+          "name": "uncheck_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Mark items not done (same matching as check_items)"
+        },
+        {
+          "name": "remove_checklist_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Delete items; absent items are no-ops"
+        },
+        {
+          "name": "add_relations",
+          "type": "array of object",
+          "required": false,
+          "description": "Add relations; keeps existing relations"
+        },
+        {
+          "name": "remove_relations",
+          "type": "array of object",
+          "required": false,
+          "description": "Remove matching relations; absent ones are no-ops"
+        },
+        {
+          "name": "add_links",
+          "type": "array of object",
+          "required": false,
+          "description": "Add links: each { url, description? }; keeps existing links"
+        },
+        {
+          "name": "remove_links",
+          "type": "array of string",
+          "required": false,
+          "description": "Remove links by exact url; absent urls are no-ops"
+        }
+      ]
+    },
+    {
+      "name": "delete_card",
+      "description": "Soft-delete a card by its uid: it leaves the board and every listing, its relations to other cards are removed, any estimation session on it is deactivated, and whiteboard elements linked to it are unlinked. The epic it belonged to is not deleted. There is no undelete through MCP.",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Card uid"
+        }
+      ]
+    },
+    {
+      "name": "move_card",
+      "description": "Move a card to a different list (or change its position within the same list). Only cards on a kanban board can be moved; cards on retrospective boards are rejected. Pass an empty string for list_id to move the card to the kanban backlog. A list is displayed top-down from its highest position, so position 0 is the BOTTOM of the list. Omit position to join the end of the queue (the bottom, position 0) in the backlog and in to_do and in_progress lists, or the top of a done list.",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Card uid"
+        },
+        {
+          "name": "list_id",
+          "type": "string",
+          "required": true,
+          "description": "Target list uid; empty string moves to backlog (kanban only)"
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "required": false,
+          "description": "Placement within the target: 0 is the bottom and the highest position is the top. Must be between 0 and the number of other cards already in the target. Omit it to join the end of the queue (position 0) in the backlog and in to_do and in_progress lists, or the top of a done list."
+        }
+      ]
+    },
+    {
+      "name": "create_epic",
+      "description": "Create an epic on a project. Only project_id and name are required. description is AgileHero Markup — never markdown or HTML; read get_ahm_spec first. Assignee uids come from list_project_users. Checklists, links and attachments can be supplied in this same call. Returns the new epic uid — what create_card / update_card take as epic_id, and what create_roadmap_slot schedules.",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "project_id",
+          "type": "string",
+          "required": true,
+          "description": "Project uid the epic belongs to"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": false,
+          "description": "AgileHero Markup (AHM) — never markdown or HTML; read get_ahm_spec first. Description surface: no tables, colors, alignment, or discussions."
+        },
+        {
+          "name": "color",
+          "type": "string",
+          "required": false,
+          "description": "Hex color like #0060F0"
+        },
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 date"
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 date"
+        },
+        {
+          "name": "assigned_to",
+          "type": "array of string",
+          "required": false,
+          "description": "Assignee user uids, discoverable via list_project_users"
+        },
+        {
+          "name": "checklists",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { name, items: [{ description, checked }] }; items keep the supplied order"
+        },
+        {
+          "name": "links",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, description }"
+        },
+        {
+          "name": "attachments",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, name }; the file is fetched from the url"
+        }
+      ]
+    },
+    {
+      "name": "update_epic",
+      "description": "Update an existing epic by its uid; only supplied fields are changed. For collections, prefer the add_*/remove_* delta fields (safe incremental edits); the plain collection fields (assigned_to, checklists, links, attachments) REPLACE the prior state destructively and cannot be combined with their deltas. Use preview_description_update / update_description to edit the description.",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Epic uid"
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": false
+        },
+        {
+          "name": "color",
+          "type": "string",
+          "required": false,
+          "description": "Hex color like #0060F0"
+        },
+        {
+          "name": "start_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 date"
+        },
+        {
+          "name": "end_date",
+          "type": "string",
+          "required": false,
+          "description": "ISO-8601 date"
+        },
+        {
+          "name": "assigned_to",
+          "type": "array of string",
+          "required": false,
+          "description": "Assignee user uids, discoverable via list_project_users; replaces the epic's assignees"
+        },
+        {
+          "name": "checklists",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { name, items: [{ description, checked }] }; replaces the epic's checklists"
+        },
+        {
+          "name": "links",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, description }; replaces the epic's links"
+        },
+        {
+          "name": "attachments",
+          "type": "array of object",
+          "required": false,
+          "description": "Each { url, name }; the file is fetched from the url; replaces the epic's attachments"
+        },
+        {
+          "name": "add_assignees",
+          "type": "array of string",
+          "required": false,
+          "description": "Add assignees by user uid; keeps existing assignees"
+        },
+        {
+          "name": "remove_assignees",
+          "type": "array of string",
+          "required": false,
+          "description": "Remove assignees by user uid; absent uids are no-ops"
+        },
+        {
+          "name": "add_checklist_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Append items: each { checklist, description, checked? } — the named checklist is created if it does not exist"
+        },
+        {
+          "name": "check_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Mark items done, matched by exact description within the named checklist"
+        },
+        {
+          "name": "uncheck_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Mark items not done (same matching as check_items)"
+        },
+        {
+          "name": "remove_checklist_items",
+          "type": "array of object",
+          "required": false,
+          "description": "Delete items; absent items are no-ops"
+        },
+        {
+          "name": "add_links",
+          "type": "array of object",
+          "required": false,
+          "description": "Add links: each { url, description? }; keeps existing links"
+        },
+        {
+          "name": "remove_links",
+          "type": "array of string",
+          "required": false,
+          "description": "Remove links by exact url; absent urls are no-ops"
+        }
+      ]
+    },
+    {
+      "name": "delete_epic",
+      "description": "Soft-delete an epic by its uid. Its cards are NOT deleted — they stay on the board, detached from the epic. The epic's roadmap slots ARE permanently deleted (a slot schedules an epic, so it is meaningless without one), and whiteboard elements linked to the epic are unlinked.",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Epic uid"
+        }
+      ]
+    },
+    {
+      "name": "create_comment",
+      "description": "Add a comment to a card or to an epic. Provide exactly one of card_id or epic_id. Content is AgileHero Markup (AHM, comment surface: no tables, media, colors, alignment, or discussions) — never markdown or HTML; read get_ahm_spec first. The comment is attributed to the signed-in user this client acts as and appears in subsequent get_card / get_epic responses. Comments cannot be edited via MCP; delete_comment removes your own (correct mistakes by delete + repost). Pass parent_comment_id to reply to an existing comment. Threads are one level deep: replying to a reply attaches the new comment to that reply's thread root instead, so do not attempt to nest replies. The parent must be a comment on the same card or epic — a uid from anywhere else is rejected.",
+      "readOnly": false,
+      "destructive": false,
+      "parameters": [
+        {
+          "name": "card_id",
+          "type": "string",
+          "required": false,
+          "description": "Card uid to comment on (mutually exclusive with epic_id)"
+        },
+        {
+          "name": "epic_id",
+          "type": "string",
+          "required": false,
+          "description": "Epic uid to comment on (mutually exclusive with card_id)"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true,
+          "description": "Comment body as AgileHero Markup (AHM)"
+        },
+        {
+          "name": "parent_comment_id",
+          "type": "string",
+          "required": false,
+          "description": "Optional uid of a comment on the SAME card or epic to reply to. Omit for a top-level comment. Replying to a reply normalises to that reply's thread root (threads are one level deep)."
+        }
+      ]
+    },
+    {
+      "name": "delete_comment",
+      "description": "Delete a comment YOU posted (comments are attributed to the signed-in user this client acts as — other people's comments cannot be deleted). The correction pattern is delete + post a corrected comment with create_comment. A deleted comment that has replies remains visible as a tombstone in its thread. Comment uids come from get_card / get_epic.",
+      "readOnly": false,
+      "destructive": true,
+      "parameters": [
+        {
+          "name": "id",
+          "type": "string",
+          "required": true,
+          "description": "Comment uid"
+        }
+      ]
+    }
+  ],
+  "ahm": {
+    "title": "AgileHero Markup (AHM) v1.0",
+    "sections": [
+      {
+        "heading": null,
+        "content": "AHM is the ONLY rich-text format AgileHero accepts. Markdown and HTML are never\naccepted and render as literal text. AHM is strict XML with a closed vocabulary —\nanything outside this specification is rejected with a repair hint."
+      },
+      {
+        "heading": "Rules",
+        "content": "1. Wrap every payload: <agile-hero-markup version=\"1.0\">...</agile-hero-markup>\n2. Escape & < > in text as &amp; &lt; &gt; (attributes also need &quot;).\n   Inside <code-line>, wrap raw code in <![CDATA[...]]> instead of escaping.\n3. Block ids: keep the id attribute of any block you edit; omit ids on new blocks\n   (the server assigns them). Never invent ids.\n4. <discussion id=\"...\">...</discussion> marks an inline team discussion anchored to\n   the wrapped text. PRESERVE these tags when editing — move them with the text they\n   annotate; deleting one unanchors a discussion for the whole team.\n5. <image/>, <attachment/> and <unknown/> are references — keep, move, or delete\n   them, never invent them (media is added through the app's upload flow)."
+      },
+      {
+        "heading": "Block elements",
+        "content": "- <paragraph> — attributes: id, align=left|center|right\n- <heading> — attributes: id, align=left|center|right, level=1|2|3 (required)\n- <quote> — attributes: id\n- <code-block> — attributes: id, lang\n- <code-line> — attributes: id\n- <divider> — attributes: id\n- <list-item> — attributes: id, style=bullet|ordered|todo (required), indent, checked=true|false, start\n- <table> — attributes: id\n- <row> — attributes: id\n- <cell> — attributes: id, header=true|false\n- <image> — attributes: id, media (required), alt, align=left|center|right, name\n- <attachment> — attributes: id, media (required), name\n- <unknown> — attributes: id, kind"
+      },
+      {
+        "heading": "Inline elements (inside paragraph, heading, quote, list-item, cell)",
+        "content": "- <bold> \n- <italic> \n- <underline> \n- <strikethrough> \n- <inline-code> \n- <color> — attributes: value (required)\n- <highlight> — attributes: value (required)\n- <link> — attributes: url (required), id\n- <mention> — attributes: uid (required), id, key\n- <discussion> — attributes: id (required)"
+      },
+      {
+        "heading": "Lists are flat",
+        "content": "Each item is one <list-item>; nesting is the indent attribute (1 = top level):\n\n  <list-item style=\"bullet\" indent=\"1\">Fruit</list-item>\n  <list-item style=\"bullet\" indent=\"2\">Apple</list-item>\n  <list-item style=\"todo\" indent=\"1\" checked=\"false\">Ship it</list-item>\n  <list-item style=\"ordered\" indent=\"1\" start=\"3\">Third</list-item>"
+      },
+      {
+        "heading": "Example document",
+        "content": "<agile-hero-markup version=\"1.0\">\n<heading level=\"1\">Sprint 12 retro</heading>\n<paragraph>We shipped <discussion id=\"d3f9k2p1\">the <bold>poker</bold> fix</discussion> early.</paragraph>\n<paragraph>See <link url=\"https://agilehero.io\">the site</link> — thanks <mention uid=\"pk3n9abc\"/>!</paragraph>\n<code-block lang=\"ruby\">\n<code-line><![CDATA[if a < b && ok?]]></code-line>\n<code-line><![CDATA[  ship!]]></code-line>\n<code-line>end</code-line>\n</code-block>\n<table>\n<row><cell header=\"true\">Metric</cell><cell header=\"true\">Value</cell></row>\n<row><cell>Velocity</cell><cell>41</cell></row>\n</table>\n</agile-hero-markup>"
+      }
+    ]
+  }
+}

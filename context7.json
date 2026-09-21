@@ -1,0 +1,19 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "AgileHero MCP Server",
+  "description": "Agile project management over MCP: kanban boards, epics, roadmap, retrospectives, whiteboards, wiki and delivery metrics as 49 tools on a hosted server, with OAuth sign-in from the client.",
+  "folders": ["docs"],
+  "excludeFolders": ["assets", "data", "scripts"],
+  "excludeFiles": [],
+  "rules": [
+    "The AgileHero MCP server is hosted at https://mcp.agilehero.io/mcp and speaks Streamable HTTP. There is nothing to install and no API key: the user signs in with their own AgileHero account from the client over OAuth 2.1, and the client must support Client ID Metadata Documents.",
+    "Every id parameter and every id in a response is a short uid returned by a list, get or search tool. Never invent or guess a uid.",
+    "Most tools need a project uid. Call list_projects first to resolve workspaces and projects instead of asking the user to paste one.",
+    "All rich text (wiki pages, card and epic descriptions, comments) is AgileHero Markup: strict XML with a closed vocabulary, never markdown and never HTML. Call get_ahm_spec once before writing any.",
+    "Rich-text edits are two-step by design: call preview_description_update or preview_wiki_page_update first, then pass the returned preview_token to update_description or update_wiki_page.",
+    "Use move_card rather than update_card to change a card's list or position; an empty list_id means the backlog.",
+    "On update tools prefer the add_* and remove_* delta fields for collections. The plain collection fields replace the prior state and cannot be combined with their deltas.",
+    "Wiki, whiteboard, retrospective and roadmap tools require the project's workspace to be on a Pro or trial plan. Every other tool works on the Free plan.",
+    "Tool calls are metered per user per workspace: 500 a day on Free, 5,000 on Pro or trial, reset at 00:00 UTC."
+  ]
+}

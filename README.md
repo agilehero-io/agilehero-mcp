@@ -10,7 +10,7 @@ the server runs at `https://mcp.agilehero.io/mcp`, and these files describe it t
 catalogs (the registry manifest, a Claude Code plugin, client configuration) and document what it can do.
 
 - Website: <https://agilehero.io>
-- Setup guide and supported clients: <https://agilehero.io/docs/mcp>
+- Setup guide and supported clients: <https://agilehero.io/docs/mcp> (also in this repo: [`docs/setup.md`](docs/setup.md), [`docs/tools.md`](docs/tools.md), [`docs/agilehero-markup.md`](docs/agilehero-markup.md))
 - AgileHero Markup (rich-text) specification: <https://agilehero.io/docs/mcp/agilehero-markup>
 - Official MCP Registry entry: `io.agilehero/agilehero`
 
@@ -158,6 +158,12 @@ returned by a list/get/search tool (never invented); most tools need a project u
 
 | File | Purpose |
 |---|---|
+| [`docs/setup.md`](docs/setup.md) | Per-client connection instructions, generated |
+| [`docs/tools.md`](docs/tools.md) | All 49 tools with parameters and a call example each, generated |
+| [`docs/agilehero-markup.md`](docs/agilehero-markup.md) | The AHM rich-text specification, generated |
+| [`data/mcp-docs.json`](data/mcp-docs.json) | Source of the three generated docs (`bin/rails mcp:docs` in the backend) |
+| [`scripts/generate-docs.mjs`](scripts/generate-docs.mjs) | Regenerates `docs/` from that JSON |
+| [`context7.json`](context7.json) | Parsing and agent-rule configuration for documentation indexes |
 | [`server.json`](server.json) | Manifest published to the Official MCP Registry |
 | [`.mcp.json`](.mcp.json) | Client configuration for the hosted server |
 | [`.claude-plugin/plugin.json`](.claude-plugin/plugin.json) | Claude Code plugin manifest (validated with `claude plugin validate`) |
