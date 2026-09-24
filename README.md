@@ -13,6 +13,7 @@ catalogs (the registry manifest, a Claude Code plugin, client configuration) and
 - Setup guide and supported clients: <https://agilehero.io/docs/mcp> (also in this repo: [`docs/setup.md`](docs/setup.md), [`docs/tools.md`](docs/tools.md), [`docs/agilehero-markup.md`](docs/agilehero-markup.md))
 - AgileHero Markup (rich-text) specification: <https://agilehero.io/docs/mcp/agilehero-markup>
 - Official MCP Registry entry: `io.agilehero/agilehero`
+- Also published on: [Smithery](https://smithery.ai/servers/agilehero-io/agilehero) · [Glama](https://glama.ai/mcp/connectors/io.agilehero/agilehero) · [LobeHub](https://lobehub.com/mcp/agilehero-io-agilehero-mcp)
 
 ## Connect
 
